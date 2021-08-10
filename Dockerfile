@@ -1,0 +1,167 @@
+# ubuntu:18.04
+FROM ubuntu@sha256:122f506735a26c0a1aff2363335412cfc4f84de38326356d31ee00c2cbe52171
+LABEL maintainer="Brazil Data Cube Team <brazildatacube@inpe.br>"
+
+USER root
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+        'gcc' \
+        'wget' \
+        'make' \
+        'curl' \
+        'gdal-bin' \
+        'python' \
+        'python-numpy' \
+        'python-gdal' \
+        'python-requests' \
+        'libtiff-dev' \
+        'libjpeg-dev' \
+        'libxml2-dev' \
+        'libgeotiff-dev' \
+        'libhdf5-dev' \
+        'libnetcdf-dev' \
+        'libidn11-dev' \
+        'zlib1g' \
+        'zlib1g-dev' \
+        'liblzma-dev' \
+        'libopenjp2-tools' \
+        'unzip' \
+        'libxmu6' \
+        'openjdk-11-jdk' \
+        'xserver-xorg' \
+        'gfortran' \
+        'git' \
+        'nano' \
+        'bison' \
+        'flex'
+
+
+#Build HDF4
+WORKDIR /tmp
+RUN wget https://support.hdfgroup.org/ftp/HDF/releases/HDF4.2.15/src/hdf-4.2.15.tar.gz
+RUN tar zxf hdf-4.2.15.tar.gz
+RUN cd hdf-4.2.15 && \
+    ./configure --prefix=/usr --disable-fortran --enable-production --enable-shared --disable-netcdf && \
+    make -j16 && \
+    make -j16 install && \
+    make clean
+
+
+#Build HDF-EOS2
+WORKDIR /tmp
+RUN curl https://git.earthdata.nasa.gov/rest/git-lfs/storage/DAS/hdfeos/cb0f900d2732ab01e51284d6c9e90d0e852d61bba9bce3b43af0430ab5414903?response-content-disposition=attachment%3B%20filename%3D%22HDF-EOS2.20v1.00.tar.Z%22%3B%20filename*%3Dutf-8%27%27HDF-EOS2.20v1.00.tar.Z -o /tmp/hdfeos.tar.Z
+RUN tar xzf /tmp/hdfeos.tar.Z -C /opt
+WORKDIR /opt/hdfeos
+RUN ./configure CC=/usr/bin/h4cc --prefix=/opt/hdfeos/build && \
+    make -j 4 && \
+    make install && \
+    make clean && \
+    ls /opt/hdfeos/build
+
+
+#Build HDF-EOS5
+WORKDIR /tmp
+RUN curl https://git.earthdata.nasa.gov/rest/git-lfs/storage/DAS/hdfeos5/7054de24b90b6d9533329ef8dc89912c5227c83fb447792103279364e13dd452?response-content-disposition=attachment%3B%20filename%3D%22HDF-EOS5.1.16.tar.Z%22%3B%20filename*%3Dutf-8%27%27HDF-EOS5.1.16.tar.Z -o /tmp/hdfeos5.tar.Z
+RUN tar xzf /tmp/hdfeos5.tar.Z -C /opt
+WORKDIR /opt/hdfeos5
+RUN ./configure CC=/usr/bin/h5cc --prefix=/opt/hdfeos5/build --with-szlib=/usr/ && \
+   make -j 4 && \
+   make install && \
+   make clean && \
+   ls /opt/hdfeos5/build
+
+
+# environment
+ENV HDFEOS_GCTPINC=/opt/hdfeos/gctp/include
+ENV HDFEOS_GCTPLIB=/opt/hdfeos/build/lib
+ENV TIFFINC=/usr/include/x86_64-linux-gnu
+ENV TIFFLIB=/usr/lib/x86_64-linux-gnu
+ENV GEOTIFF_INC=/usr/include/geotiff
+ENV GEOTIFF_LIB=/usr/lib/x86_64-linux-gnu
+ENV HDFINC=/usr/include/hdf
+ENV HDFLIB=/usr/lib/libdf.so
+ENV HDF5INC=/usr/include/hdf5/serial
+ENV HDF5LIB=/usr/lib/x86_64-linux-gnu/hdf5/serial
+ENV HDFEOS_INC=/opt/hdfeos/include
+ENV HDFEOS_LIB=/opt/hdfeos/build/lib
+ENV HDFEOS5_LIB=/opt/hdfeos5/build/lib
+ENV HDFEOS5_INC=/opt/hdfeos5/include
+ENV NCDF4INC=/usr/include
+ENV NCDF4LIB=/usr/lib/x86_64-linux-gnu
+ENV JPEGINC=/usr/include
+ENV JPEGLIB=/usr/lib/x86_64-linux-gnu
+ENV XML2INC=/usr/include/libxml2
+ENV XML2LIB=/usr/lib/x86_64-linux-gnu
+ENV JBIGINC=/usr/include
+ENV JBIGLIB=/usr/lib/x86_64-linux-gnu
+ENV ZLIBINC=/usr/include
+ENV ZLIBLIB=/usr/lib/x86_64-linux-gnu
+ENV SZIPINC=/usr/include
+ENV SZIPLIB=/usr/lib/x86_64-linux-gnu
+ENV CURLINC=/usr/include/curl
+ENV CURLLIB=/usr/lib/x86_64-linux-gnu
+ENV LZMAINC=/usr/include/lzma
+ENV LZMALIB=/usr/lib/x86_64-linux-gnu
+ENV IDNINC=/usr/include
+ENV IDNLIB=/usr/lib/x86_64-linux-gnu
+ENV ESPAINC=/opt/espa-product-formatter/raw_binary/include
+ENV ESPALIB=/opt/espa-product-formatter/raw_binary/lib
+
+
+# product formatter
+WORKDIR /tmp
+RUN curl -L https://github.com/brazil-data-cube/espa-product-formatter/archive/product_formatter_v1.19.0.tar.gz -o /tmp/product_formatter.tar.gz && \
+   tar xzf /tmp/product_formatter.tar.gz && \
+   mv espa-product-formatter-product_formatter_v1.19.0 /opt/espa-product-formatter && \
+   rm /tmp/product_formatter.tar.gz
+
+ENV PREFIX=/opt/espa-product-formatter/build
+
+WORKDIR /opt/espa-product-formatter
+RUN make && \
+   make install && \
+   ls -l $PREFIX
+
+
+# surface reflectance LaSRC
+WORKDIR /tmp
+RUN curl -L https://github.com/brazil-data-cube/espa-surface-reflectance/archive/dev_lasrc_v2.0.1.tar.gz -o /tmp/lasrc.tar.gz && \
+    tar xzf /tmp/lasrc.tar.gz && \
+    mv espa-surface-reflectance-dev_lasrc_v2.0.1 /opt/espa-surface-reflectance && \
+    rm /tmp/lasrc.tar.gz
+
+ENV PREFIX=/opt/espa-surface-reflectance/build
+
+WORKDIR /opt/espa-surface-reflectance/lasrc
+RUN make && \
+    make install && \
+    make clean && \
+    ls -l $PREFIX
+
+RUN make all-lasrc-aux && \
+    make install-lasrc-aux && \
+    make clean-lasrc-aux && \
+    ls -l $PREFIX
+
+WORKDIR /opt/espa-surface-reflectance/scripts
+RUN make && \
+    make install && \
+    make clean && \
+    ls -l $PREFIX
+
+ENV L8_AUX_DIR=/mnt/atmcor_aux/lasrc/L8
+ENV LASRC_AUX_DIR=$L8_AUX_DIR
+ENV ESPA_SCHEMA=/opt/espa-product-formatter/build/schema/espa_internal_metadata_v2_2.xsd
+ENV PATH=/opt/espa-product-formatter/build/bin:/opt/espa-cloud-masking/build/bin:/opt/espa-surface-reflectance/build/bin:$PATH
+
+RUN apt-get autoremove -y && \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /work
+
+COPY run_lasrc.sh /usr/local/bin/run_lasrc.sh
+RUN chmod +x /usr/local/bin/run_lasrc.sh
+
+ENTRYPOINT ["/usr/local/bin/run_lasrc.sh"]
+CMD ["--help"]
