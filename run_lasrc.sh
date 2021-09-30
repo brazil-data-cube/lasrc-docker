@@ -10,40 +10,64 @@ if [ $1 == "--help" ]; then
     -t lasrc <LANDSAT-8 FOLDER OR SENTINEL-2.SAFE>"
     exit 0
 fi
-# Set default directories to the INDIR and OUTDIR
-# You can customize it using INDIR=/my/custom OUTDIR=/my/out run_lasrc.sh
+
+# Set default directories to the INDIR
+# You can customize it using INDIR=/my/custom run_lasrc.sh
 if [ -z "${INDIR}" ]; then
     INDIR=/mnt/input-dir
 fi
 
+if [ -z "${WORKDIR}" ]; then
+    WORKDIR=/mnt/work-dir/
+fi
+mkdir -p ${WORKDIR}
+
 ##Landsat
 if [[ $1 == "LC08"* ]]; then
-    SCENE_ID=$1
-    WORKDIR=/work/${SCENE_ID}
+    INPUT_PRODUCT=$1
+    shift
+
+    # Check if .tar.gz or folder
+    if [[ $INPUT_PRODUCT == *.tar.gz ]]; then
+        SCENE_ID=${INPUT_PRODUCT%.tar.gz}
+    else
+        SCENE_ID=$INPUT_PRODUCT
+    fi
 
     if [ -z "${OUTDIR}" ]; then
         OUTDIR=/mnt/output-dir/${SCENE_ID}
     fi
 
-    MTD_FILES=$(find ${INDIR} -name "${SCENE_ID}_MTL.txt" -o -name "${SCENE_ID}_ANG.txt")
-    TIF_PATTERNS="${SCENE_ID}_*.tif -iname ${SCENE_ID}_*.TIF"
-    # ensure that workdir/sceneid is clean
-    rm -rf ${WORKDIR}
-    mkdir -p $WORKDIR
+    # Ensure that workdir/sceneid is clean
+    if [ -d "${WORKDIR}/${SCENE_ID}" ]; then
+        rm -r ${WORKDIR}/${SCENE_ID}
+    fi
+
+    #check if dir or .tar.gz
+    if [[ $INPUT_PRODUCT == *.tar.gz ]]; then
+        mkdir -p $WORKDIR/$SCENE_ID
+        tar -xzf ${INDIR}/$INPUT_PRODUCT -C "$WORKDIR/$SCENE_ID"
+    else
+        cp -r ${INDIR}/$SCENE_ID ${WORKDIR}
+    fi
+    WORKDIR=$WORKDIR/$SCENE_ID
     cd $WORKDIR
+
+    MTD_FILES=$(find ${WORKDIR} -name "${SCENE_ID}_MTL.txt" -o -name "${SCENE_ID}_ANG.txt")
+    TIF_PATTERNS="${SCENE_ID}_*.tif -iname ${SCENE_ID}_*.TIF"
+
     # only make files with the correct scene ID visible
-    for f in $(find ${INDIR} -iname "${SCENE_ID}*.tif"); do
+    for f in $(find ${WORKDIR} -iname "${SCENE_ID}*.tif"); do
         echo $f
         if gdalinfo $f | grep -q 'Block=.*x1\s'; then
-            ln -s $(readlink -f $f) $WORKDIR/$(basename $f)
+            continue
         else
             # convert tiled tifs to striped layout
-            gdal_translate -co TILED=NO $f $WORKDIR/$(basename $f)
+            gdal_translate -co TILED=NO $f $WORKDIR/$(basename $f).tmp
+            mv $WORKDIR/$(basename $f).tmp $WORKDIR/$(basename $f)
         fi
     done
-    for f in $MTD_FILES; do
-        cp $f $WORKDIR
-    done
+
     # run ESPA stack
     convert_lpgs_to_espa --mtl=${SCENE_ID}_MTL.txt
 
@@ -62,29 +86,48 @@ if [[ $1 == "LC08"* ]]; then
     rm -rf $WORKDIR
 ## SENTINEL-2
 elif [[ $1 == "S2"* ]]; then
-    SAFENAME=$1
-    SAFEDIR=${INDIR}/${SAFENAME}
-    SCENE_ID=${SAFENAME:0:-5}
+    INPUT_PRODUCT=$1
+    shift
 
-    if [ -z "${OUTDIR}" ]; then
-        OUTDIR=/mnt/output-dir/${SCENE_ID}
+    if [[ $INPUT_PRODUCT == *.SAFE ]]; then
+        SAFENAME_L1C=$INPUT_PRODUCT
+        SAFEDIR_L1C=${INDIR}/${SAFENAME_L1C}
+    elif [[ $INPUT_PRODUCT == *.zip ]]; then
+        SAFENAME_L1C="$(unzip -qql ${INDIR}/$INPUT_PRODUCT | head -n1 | tr -s ' ' | cut -d' ' -f5-)"
+    else
+        echo "ERROR: Not valid Sentinel-2 L1C"
+        exit 1
+    fi
+    SCENE_ID=${SAFENAME_L1C%.SAFE*}
+
+    # Ensure that workdir/sceneid is clean
+    if [ -d "${WORKDIR}/${SAFENAME_L1C}" ]; then
+        rm -r ${WORKDIR}/${SAFENAME_L1C}
     fi
 
-    WORKDIR=/work/${SAFENAME}
-    JP2_PATTERNS=$(find ${INDIR} -name "${SCENE_ID}_*.jp2" -o -name "${SCENE_ID}_*.JP2")
-    # ensure that workdir/sceneid is clean
-    rm -rf ${WORKDIR}
-    mkdir -p ${WORKDIR}
-    cp -r ${SAFEDIR}/* ${WORKDIR}/
-    cd ${WORKDIR}/GRANULE
-    for entry in `ls ${WORKDIR}/GRANULE`; do
-        GRANULE_SCENE=${WORKDIR}/GRANULE/${entry}
+    #check if dir or .zip
+    if [[ $INPUT_PRODUCT == *.SAFE ]]; then
+        cp -r ${SAFEDIR_L1C} ${WORKDIR}
+    elif [[ $INPUT_PRODUCT == *.zip ]]; then
+        unzip ${INDIR}/$INPUT_PRODUCT -d ${WORKDIR}
+    fi
+
+    if [ -z "${OUTDIR}" ]; then
+        OUTDIR=/mnt/output-dir/
+    fi
+    OUTDIR=${OUTDIR}/${SCENE_ID}
+
+    JP2_PATTERNS=$(find ${WORKDIR}/${SAFENAME_L1C} -name "${SCENE_ID}_*.jp2" -o -name "${SCENE_ID}_*.JP2")
+
+    cd ${WORKDIR}/${SAFENAME_L1C}/GRANULE
+    for entry in `ls ${WORKDIR}/${SAFENAME_L1C}/GRANULE`; do
+        GRANULE_SCENE=${WORKDIR}/${SAFENAME_L1C}/GRANULE/${entry}
     done
     IMG_DATA=${GRANULE_SCENE}/IMG_DATA
     cd ${IMG_DATA}
     #Copy XMLs
-    cp $WORKDIR/MTD_MSIL1C.xml $IMG_DATA
-    cp $GRANULE_SCENE/MTD_TL.xml $IMG_DATA
+    cp ${WORKDIR}/${SAFENAME_L1C}/MTD_MSIL1C.xml ${IMG_DATA}
+    cp ${GRANULE_SCENE}/MTD_TL.xml ${IMG_DATA}
     # run ESPA stack
     convert_sentinel_to_espa
     for entry in `ls ${IMG_DATA}/S2*.xml`; do
@@ -99,8 +142,8 @@ elif [[ $1 == "S2"* ]]; then
         gdal_translate -co "COMPRESS=DEFLATE" $f $OUTDIR/$(basename $f)
     done
     #Copy XMLs
-    cp $WORKDIR/MTD_MSIL1C.xml $OUTDIR
-    cp $GRANULE_SCENE/MTD_TL.xml $OUTDIR
-    rm -rf $WORKDIR
+    cp ${WORKDIR}/${SAFENAME_L1C}/MTD_MSIL1C.xml $OUTDIR
+    cp ${GRANULE_SCENE}/MTD_TL.xml $OUTDIR
+    rm -rf ${WORKDIR}/$SAFENAME_L1C
 fi
 exit 0
