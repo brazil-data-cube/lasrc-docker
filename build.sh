@@ -13,7 +13,7 @@ set -eou pipefail
 # General functions
 #
 usage() {
-    echo "Usage: $0 [-n] [-v <2.9.0>] [-b ubuntu:18.04]" 1>&2;
+    echo "Usage: $0 [-n] [-b ubuntu:18.04]" 1>&2;
 
     exit 1;
 }
