@@ -1,5 +1,6 @@
 # ubuntu:18.04
-FROM ubuntu@sha256:122f506735a26c0a1aff2363335412cfc4f84de38326356d31ee00c2cbe52171
+ARG BASE_IMAGE=ubuntu:ubuntu@sha256:122f506735a26c0a1aff2363335412cfc4f84de38326356d31ee00c2cbe52171
+FROM ${BASE_IMAGE}
 LABEL maintainer="Brazil Data Cube Team <brazildatacube@inpe.br>"
 
 USER root
@@ -158,7 +159,7 @@ ENV PATH=/opt/espa-product-formatter/build/bin:/opt/espa-cloud-masking/build/bin
 RUN apt-get autoremove -y && \
     rm -rf /var/lib/apt/lists/*
 
-WORKDIR /work
+WORKDIR /mnt/work-dir
 
 COPY run_lasrc.sh /usr/local/bin/run_lasrc.sh
 RUN chmod +x /usr/local/bin/run_lasrc.sh
