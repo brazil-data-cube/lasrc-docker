@@ -1,7 +1,20 @@
-# ubuntu:18.04
-ARG BASE_IMAGE=ubuntu:ubuntu@sha256:122f506735a26c0a1aff2363335412cfc4f84de38326356d31ee00c2cbe52171
+#
+# This file is part of LaSRC Docker.
+# Copyright (C) 2021-2022 INPE.
+#
+# LaSRC Docker is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
+#
+
+# Base image
+ARG BASE_IMAGE=ubuntu:18.04
 FROM ${BASE_IMAGE}
-LABEL maintainer="Brazil Data Cube Team <brazildatacube@inpe.br>"
+
+# Image metadata
+LABEL "org.brazildatacube.maintainer"="Brazil Data Cube <brazildatacube@inpe.br>"
+LABEL "org.brazildatacube.title"="Docker image for LaSRC"
+LABEL "org.brazildatacube.description"="Software environment \
+for Surface Reflectance product generation and formatting."
 
 USER root
 
@@ -37,7 +50,6 @@ RUN apt-get update && \
         'bison' \
         'flex'
 
-
 #Build HDF4
 WORKDIR /tmp
 RUN wget https://support.hdfgroup.org/ftp/HDF/releases/HDF4.2.15/src/hdf-4.2.15.tar.gz
@@ -47,7 +59,6 @@ RUN cd hdf-4.2.15 && \
     make -j16 && \
     make -j16 install && \
     make clean
-
 
 #Build HDF-EOS2
 WORKDIR /tmp
@@ -60,7 +71,6 @@ RUN ./configure CC=/usr/bin/h4cc --prefix=/opt/hdfeos/build && \
     make clean && \
     ls /opt/hdfeos/build
 
-
 #Build HDF-EOS5
 WORKDIR /tmp
 RUN curl https://git.earthdata.nasa.gov/rest/git-lfs/storage/DAS/hdfeos5/7054de24b90b6d9533329ef8dc89912c5227c83fb447792103279364e13dd452?response-content-disposition=attachment%3B%20filename%3D%22HDF-EOS5.1.16.tar.Z%22%3B%20filename*%3Dutf-8%27%27HDF-EOS5.1.16.tar.Z -o /tmp/hdfeos5.tar.Z
@@ -71,7 +81,6 @@ RUN ./configure CC=/usr/bin/h5cc --prefix=/opt/hdfeos5/build --with-szlib=/usr/ 
    make install && \
    make clean && \
    ls /opt/hdfeos5/build
-
 
 # environment
 ENV HDFEOS_GCTPINC=/opt/hdfeos/gctp/include
@@ -109,7 +118,6 @@ ENV IDNLIB=/usr/lib/x86_64-linux-gnu
 ENV ESPAINC=/opt/espa-product-formatter/raw_binary/include
 ENV ESPALIB=/opt/espa-product-formatter/raw_binary/lib
 
-
 # product formatter
 WORKDIR /tmp
 RUN curl -L https://github.com/brazil-data-cube/espa-product-formatter/archive/product_formatter_v1.19.0.tar.gz -o /tmp/product_formatter.tar.gz && \
@@ -123,7 +131,6 @@ WORKDIR /opt/espa-product-formatter
 RUN make && \
    make install && \
    ls -l $PREFIX
-
 
 # surface reflectance LaSRC
 WORKDIR /tmp
