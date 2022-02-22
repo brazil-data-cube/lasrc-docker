@@ -8,7 +8,7 @@ Landsat-8 and Sentinel-2 atmospheric correction through LaSRC 2.0.1.
 
 ## LaSRC Auxiliary Data
 
-Download the ``https://edclpdsftp.cr.usgs.gov/downloads/auxiliaries/lasrc_auxiliary/L8/`` into *L8*. The LADS folder can contain only data from dates that are going to be processed.
+Download the [https://edclpdsftp.cr.usgs.gov/downloads/auxiliaries/lasrc_auxiliary/L8/](https://edclpdsftp.cr.usgs.gov/downloads/auxiliaries/lasrc_auxiliary/L8/) into *L8*. The LADS folder can contain only data from dates that are going to be processed.
 
 Or, you can also download MODIS CMG and CMA to generate the LADS files by running the following command from within the container:
     ```bash
@@ -51,4 +51,4 @@ Results are written on mounted `/mnt/output-dir/SCENEID`.
 
 ## Acknowledgements
 
-Copyright for portions of LaSRC 1.4 docker code are held by `DHI GRAS A/S <https://github.com/DHI-GRAS>`_, 2018 as part of project `lasrclicious <https://github.com/DHI-GRAS/lasrclicious>`_.
+Copyright for portions of LaSRC 1.4 docker code are held by [DHI GRAS A/S](https://github.com/DHI-GRAS), 2018 as part of project [lasrclicious](https://github.com/DHI-GRAS/lasrclicious).
