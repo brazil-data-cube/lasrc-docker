@@ -31,36 +31,24 @@ if [ -z "${WORKDIR}" ]; then
 fi
 mkdir -p ${WORKDIR}
 
+if [ -z "${OUTDIR}" ]; then
+    OUTDIR=/mnt/output-dir
+fi
+
+INPUT_PRODUCT=$1
+
+# Ensure that workdir/sceneid is clean
+if [ -d "${WORKDIR}/${INPUT_PRODUCT}" ]; then
+    rm -r ${WORKDIR}/${INPUT_PRODUCT}
+fi
+
 # Landsat
 if [[ $1 == "LC08"* ]]; then
-    INPUT_PRODUCT=$1
-    shift
-
-    # Check if .tar.gz or folder
-    if [[ $INPUT_PRODUCT == *.tar.gz ]]; then
-        SCENE_ID=${INPUT_PRODUCT%.tar.gz}
-    else
-        SCENE_ID=$INPUT_PRODUCT
-    fi
-
-    if [ -z "${OUTDIR}" ]; then
-        OUTDIR=/mnt/output-dir/${SCENE_ID}
-    fi
-
-    # Ensure that workdir/sceneid is clean
-    if [ -d "${WORKDIR}/${SCENE_ID}" ]; then
-        rm -r ${WORKDIR}/${SCENE_ID}
-    fi
-
-    # Check if dir or .tar.gz
-    if [[ $INPUT_PRODUCT == *.tar.gz ]]; then
-        mkdir -p $WORKDIR/$SCENE_ID
-        tar -xzf ${INDIR}/$INPUT_PRODUCT -C "$WORKDIR/$SCENE_ID"
-    else
-        cp -r ${INDIR}/$SCENE_ID ${WORKDIR}
-    fi
+    SCENE_ID=$INPUT_PRODUCT
+    OUTDIR=${OUTDIR}/${SCENE_ID}
     WORKDIR=$WORKDIR/$SCENE_ID
-    cd $WORKDIR
+
+    cp -r ${INDIR}/$SCENE_ID ${WORKDIR}
 
     MTD_FILES=$(find ${WORKDIR} -name "${SCENE_ID}_MTL.txt" -o -name "${SCENE_ID}_ANG.txt")
     TIF_PATTERNS="${SCENE_ID}_*.tif -iname ${SCENE_ID}_*.TIF"
@@ -76,6 +64,8 @@ if [[ $1 == "LC08"* ]]; then
             mv $WORKDIR/$(basename $f).tmp $WORKDIR/$(basename $f)
         fi
     done
+
+    cd $WORKDIR
 
     # Run ESPA stack
     convert_lpgs_to_espa --mtl=${SCENE_ID}_MTL.txt
@@ -97,35 +87,10 @@ if [[ $1 == "LC08"* ]]; then
     rm -rf $WORKDIR
 # SENTINEL-2
 elif [[ $1 == "S2"* ]]; then
-    INPUT_PRODUCT=$1
-    shift
-
-    if [[ $INPUT_PRODUCT == *.SAFE ]]; then
-        SAFENAME_L1C=$INPUT_PRODUCT
-        SAFEDIR_L1C=${INDIR}/${SAFENAME_L1C}
-    elif [[ $INPUT_PRODUCT == *.zip ]]; then
-        SAFENAME_L1C="$(unzip -qql ${INDIR}/$INPUT_PRODUCT | head -n1 | tr -s ' ' | cut -d' ' -f5-)"
-    else
-        echo "ERROR: Not valid Sentinel-2 L1C"
-        exit 1
-    fi
+    SAFENAME_L1C=$INPUT_PRODUCT
     SCENE_ID=${SAFENAME_L1C%.SAFE*}
 
-    # Ensure that workdir/sceneid is clean
-    if [ -d "${WORKDIR}/${SAFENAME_L1C}" ]; then
-        rm -r ${WORKDIR}/${SAFENAME_L1C}
-    fi
-
-    # Check if dir or .zip
-    if [[ $INPUT_PRODUCT == *.SAFE ]]; then
-        cp -r ${SAFEDIR_L1C} ${WORKDIR}
-    elif [[ $INPUT_PRODUCT == *.zip ]]; then
-        unzip ${INDIR}/$INPUT_PRODUCT -d ${WORKDIR}
-    fi
-
-    if [ -z "${OUTDIR}" ]; then
-        OUTDIR=/mnt/output-dir/
-    fi
+    cp -r ${INDIR}/${SAFENAME_L1C} ${WORKDIR}
     OUTDIR=${OUTDIR}/${SCENE_ID}
 
     JP2_PATTERNS=$(find ${WORKDIR}/${SAFENAME_L1C} -name "${SCENE_ID}_*.jp2" -o -name "${SCENE_ID}_*.JP2")
@@ -157,4 +122,5 @@ elif [[ $1 == "S2"* ]]; then
     cp ${GRANULE_SCENE}/MTD_TL.xml $OUTDIR
     rm -rf ${WORKDIR}/$SAFENAME_L1C
 fi
+
 exit 0
