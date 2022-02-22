@@ -1,57 +1,82 @@
 #!/bin/bash
+#
+# This file is part of LaSRC Docker.
+# Copyright (C) 2021-2022 INPE.
+#
+# LaSRC Docker is free software; you can redistribute it and/or modify it
+# under the terms of the MIT License; see LICENSE file for more details.
+#
+
 set -e
 shopt -s nullglob
+
 if [ $1 == "--help" ]; then
     echo "Usage: \
     docker run --rm \
     -v /path/to/input/:/mnt/input-dir:ro \
     -v /path/to/output:/mnt/output-dir:rw \
     -v /path/to/lasrc_auxiliaries/L8:/mnt/atmcor_aux/L8:ro \
-    -t lasrc <LANDSAT-8 FOLDER OR SENTINEL-2.SAFE>"
+    -t brazildatacube/lasrc:2.0.1 <LANDSAT-8 FOLDER OR SENTINEL-2.SAFE>"
     exit 0
 fi
-# Set default directories to the INDIR and OUTDIR
-# You can customize it using INDIR=/my/custom OUTDIR=/my/out run_lasrc.sh
+
+# Set default directories to the INDIR
+# You can customize it using INDIR=/my/custom run_lasrc.sh
 if [ -z "${INDIR}" ]; then
     INDIR=/mnt/input-dir
 fi
 
-##Landsat
+if [ -z "${WORKDIR}" ]; then
+    WORKDIR=/mnt/work-dir/
+fi
+mkdir -p ${WORKDIR}
+
+if [ -z "${OUTDIR}" ]; then
+    OUTDIR=/mnt/output-dir
+fi
+
+INPUT_PRODUCT=$1
+
+# Ensure that workdir/sceneid is clean
+if [ -d "${WORKDIR}/${INPUT_PRODUCT}" ]; then
+    rm -r ${WORKDIR}/${INPUT_PRODUCT}
+fi
+
+# Landsat
 if [[ $1 == "LC08"* ]]; then
-    SCENE_ID=$1
-    WORKDIR=/work/${SCENE_ID}
+    SCENE_ID=$INPUT_PRODUCT
+    OUTDIR=${OUTDIR}/${SCENE_ID}
+    WORKDIR=$WORKDIR/$SCENE_ID
 
-    if [ -z "${OUTDIR}" ]; then
-        OUTDIR=/mnt/output-dir/${SCENE_ID}
-    fi
+    cp -r ${INDIR}/$SCENE_ID ${WORKDIR}
 
-    MTD_FILES=$(find ${INDIR} -name "${SCENE_ID}_MTL.txt" -o -name "${SCENE_ID}_ANG.txt")
+    MTD_FILES=$(find ${WORKDIR} -name "${SCENE_ID}_MTL.txt" -o -name "${SCENE_ID}_ANG.txt")
     TIF_PATTERNS="${SCENE_ID}_*.tif -iname ${SCENE_ID}_*.TIF"
-    # ensure that workdir/sceneid is clean
-    rm -rf ${WORKDIR}
-    mkdir -p $WORKDIR
-    cd $WORKDIR
-    # only make files with the correct scene ID visible
-    for f in $(find ${INDIR} -iname "${SCENE_ID}*.tif"); do
+
+    # Only make files with the correct scene ID visible
+    for f in $(find ${WORKDIR} -iname "${SCENE_ID}*.tif"); do
         echo $f
         if gdalinfo $f | grep -q 'Block=.*x1\s'; then
-            ln -s $(readlink -f $f) $WORKDIR/$(basename $f)
+            continue
         else
             # convert tiled tifs to striped layout
-            gdal_translate -co TILED=NO $f $WORKDIR/$(basename $f)
+            gdal_translate -co TILED=NO $f $WORKDIR/$(basename $f).tmp
+            mv $WORKDIR/$(basename $f).tmp $WORKDIR/$(basename $f)
         fi
     done
-    for f in $MTD_FILES; do
-        cp $f $WORKDIR
-    done
-    # run ESPA stack
+
+    cd $WORKDIR
+
+    # Run ESPA stack
     convert_lpgs_to_espa --mtl=${SCENE_ID}_MTL.txt
 
     do_lasrc_landsat.py --xml ${SCENE_ID}.xml # --write_toa
-    OUT_PATTERNS="$WORKDIR/${SCENE_ID}_toa_*.tif $WORKDIR/${SCENE_ID}_sr_*.tif $WORKDIR/${SCENE_ID}_bt_*.tif $WORKDIR/${SCENE_ID}_radsat_qa.tif $WORKDIR/${SCENE_ID}_sensor*.tif $WORKDIR/${SCENE_ID}_solar*.tif"
+    OUT_PATTERNS="$WORKDIR/${SCENE_ID}_sr_*.tif $WORKDIR/${SCENE_ID}_radsat_qa.tif $WORKDIR/${SCENE_ID}_sensor*.tif $WORKDIR/${SCENE_ID}_solar*.tif"
+    # TODO Option to export toa and bt
+    # $WORKDIR/${SCENE_ID}_toa_*.tif $WORKDIR/${SCENE_ID}_bt_*.tif
 
     convert_espa_to_gtif --xml=${SCENE_ID}.xml --gtif=$SCENE_ID --del_src_files
-    ## Copy outputs from workdir
+    # Copy outputs from workdir
     mkdir -p $OUTDIR
     for f in $OUT_PATTERNS; do
         gdal_translate -co "COMPRESS=DEFLATE" $f $OUTDIR/$(basename $f)
@@ -60,47 +85,42 @@ if [[ $1 == "LC08"* ]]; then
         cp $WORKDIR/$(basename $f) $OUTDIR/$(basename $f)
     done
     rm -rf $WORKDIR
-## SENTINEL-2
+# SENTINEL-2
 elif [[ $1 == "S2"* ]]; then
-    SAFENAME=$1
-    SAFEDIR=${INDIR}/${SAFENAME}
-    SCENE_ID=${SAFENAME:0:-5}
+    SAFENAME_L1C=$INPUT_PRODUCT
+    SCENE_ID=${SAFENAME_L1C%.SAFE*}
 
-    if [ -z "${OUTDIR}" ]; then
-        OUTDIR=/mnt/output-dir/${SCENE_ID}
-    fi
+    cp -r ${INDIR}/${SAFENAME_L1C} ${WORKDIR}
+    OUTDIR=${OUTDIR}/${SCENE_ID}
 
-    WORKDIR=/work/${SAFENAME}
-    JP2_PATTERNS=$(find ${INDIR} -name "${SCENE_ID}_*.jp2" -o -name "${SCENE_ID}_*.JP2")
-    # ensure that workdir/sceneid is clean
-    rm -rf ${WORKDIR}
-    mkdir -p ${WORKDIR}
-    cp -r ${SAFEDIR}/* ${WORKDIR}/
-    cd ${WORKDIR}/GRANULE
-    for entry in `ls ${WORKDIR}/GRANULE`; do
-        GRANULE_SCENE=${WORKDIR}/GRANULE/${entry}
+    JP2_PATTERNS=$(find ${WORKDIR}/${SAFENAME_L1C} -name "${SCENE_ID}_*.jp2" -o -name "${SCENE_ID}_*.JP2")
+
+    cd ${WORKDIR}/${SAFENAME_L1C}/GRANULE
+    for entry in `ls ${WORKDIR}/${SAFENAME_L1C}/GRANULE`; do
+        GRANULE_SCENE=${WORKDIR}/${SAFENAME_L1C}/GRANULE/${entry}
     done
     IMG_DATA=${GRANULE_SCENE}/IMG_DATA
     cd ${IMG_DATA}
-    #Copy XMLs
-    cp $WORKDIR/MTD_MSIL1C.xml $IMG_DATA
-    cp $GRANULE_SCENE/MTD_TL.xml $IMG_DATA
-    # run ESPA stack
+    # Copy XMLs
+    cp ${WORKDIR}/${SAFENAME_L1C}/MTD_MSIL1C.xml ${IMG_DATA}
+    cp ${GRANULE_SCENE}/MTD_TL.xml ${IMG_DATA}
+    # Run ESPA stack
     convert_sentinel_to_espa
     for entry in `ls ${IMG_DATA}/S2*.xml`; do
         SCENE_ID_XML=${entry}
     done
     do_lasrc_sentinel.py --xml=${SCENE_ID_XML}
     convert_espa_to_gtif --xml=${SCENE_ID_XML} --gtif=${SCENE_ID} --del_src_files
-    ## Copy outputs from workdir
+    # Copy outputs from workdir
     mkdir -p $OUTDIR
     OUT_PATTERNS="${IMG_DATA}/${SCENE_ID}_sr_*.tif"
     for f in $OUT_PATTERNS; do
         gdal_translate -co "COMPRESS=DEFLATE" $f $OUTDIR/$(basename $f)
     done
-    #Copy XMLs
-    cp $WORKDIR/MTD_MSIL1C.xml $OUTDIR
-    cp $GRANULE_SCENE/MTD_TL.xml $OUTDIR
-    rm -rf $WORKDIR
+    # Copy XMLs
+    cp ${WORKDIR}/${SAFENAME_L1C}/MTD_MSIL1C.xml $OUTDIR
+    cp ${GRANULE_SCENE}/MTD_TL.xml $OUTDIR
+    rm -rf ${WORKDIR}/$SAFENAME_L1C
 fi
+
 exit 0
