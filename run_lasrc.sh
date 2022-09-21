@@ -1,10 +1,20 @@
 #!/bin/bash
 #
-# This file is part of LaSRC Docker.
-# Copyright (C) 2021-2022 INPE.
+# This file is part of Brazil Data Cube LaSRC Docker.
+# Copyright (C) 2022 INPE.
 #
-# LaSRC Docker is free software; you can redistribute it and/or modify it
-# under the terms of the MIT License; see LICENSE file for more details.
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.html>.
 #
 
 set -e
@@ -15,7 +25,7 @@ if [ $1 == "--help" ]; then
     docker run --rm \
     -v /path/to/input/:/mnt/input-dir:ro \
     -v /path/to/output:/mnt/output-dir:rw \
-    -v /path/to/lasrc_auxiliaries/L8:/mnt/atmcor_aux/L8:ro \
+    -v /path/to/lasrc-auxiliaries/L8:/mnt/atmcor-aux/L8:ro \
     -t brazildatacube/lasrc:2.0.1 <LANDSAT-8 FOLDER OR SENTINEL-2.SAFE>"
     exit 0
 fi

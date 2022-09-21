@@ -1,3 +1,21 @@
+..
+    This file is part of Brazil Data Cube LaSRC Docker.
+    Copyright (C) 2022 INPE.
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.html>.
+
+
 # LaSRC 2.0.1
 
 Landsat-8 and Sentinel-2 atmospheric correction through LaSRC 2.0.1.
@@ -33,7 +51,7 @@ To process a Landsat-8 scene (e.g. `LC08_L1TP_220069_20190112_20190131_01_T1`) r
 $ docker run --rm \
     -v /path/to/input/:/mnt/input-dir:rw \
     -v /path/to/output:/mnt/output-dir:rw \
-    -v /path/to/lasrc_auxiliaries/L8:/mnt/atmcor_aux/lasrc/L8:ro \
+    -v /path/to/lasrc-auxiliaries/L8:/mnt/atmcor-aux/lasrc/L8:ro \
     -t brazildatacube/lasrc:2.0.1 LC08_L1TP_220069_20190112_20190131_01_T1
 ```
 
